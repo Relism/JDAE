@@ -5,13 +5,13 @@
     <modelVersion>4.0.0</modelVersion>
 
     <artifactId>jdae-api</artifactId>
-    <version>1.0</version>
+    <version>1.0.2</version>
     <packaging>jar</packaging>
 
     <parent>
         <groupId>dev.relism</groupId>
         <artifactId>jdae-parent</artifactId>
-        <version>1.0</version>
+        <version>1.0.2</version>
     </parent>
 
     <!-- Inherit compiler and encoding settings from parent -->
