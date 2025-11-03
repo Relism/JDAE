@@ -40,6 +40,10 @@ public final class AnnotationDescriptor {
             return this;
         }
 
+        public Builder member(String name, Object val) {
+            return value(name, val);
+        }
+
         public AnnotationDescriptor build() {
             return new AnnotationDescriptor(annotationClassName, values);
         }

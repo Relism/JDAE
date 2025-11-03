@@ -7,5 +7,9 @@ import java.util.function.Consumer;
  */
 public interface ExpansionContext {
     AnnotationBuilder addAnnotation(String annotationClassName);
-    ExpansionContext with(Consumer<ExpansionContext> consumer);
+    AnnotationBuilder addAnnotation(Class<?> annotationClass);
+
+    // Convenience one-shot to add and configure an annotation inline
+    ExpansionContext addAnnotation(String annotationClassName, Consumer<AnnotationBuilder> consumer);
+    ExpansionContext addAnnotation(Class<?> annotationClass, Consumer<AnnotationBuilder> consumer);
 }

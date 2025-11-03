@@ -34,9 +34,8 @@ public class JDAEExpandMojo extends AbstractMojo {
             return;
         }
 
+        // god had no say in the creation of this monstrosity
         ClassScanner scanner = new ClassScanner();
-        // Build a project-aware classloader that includes the compiled classes directory,
-        // with the plugin's classloader as parent so shared API types remain compatible.
         ClassLoader pluginCl = getClass().getClassLoader();
         java.net.URL projectOutputUrl;
         try {
@@ -45,7 +44,6 @@ public class JDAEExpandMojo extends AbstractMojo {
             throw new MojoExecutionException("Invalid classes directory URL: " + classesDir, e);
         }
         java.net.URLClassLoader projectCl = new java.net.URLClassLoader(new java.net.URL[]{projectOutputUrl}, pluginCl);
-        // Set as context CL to assist any nested lookups that rely on it
         Thread current = Thread.currentThread();
         ClassLoader prevCl = current.getContextClassLoader();
         current.setContextClassLoader(projectCl);
@@ -73,7 +71,7 @@ public class JDAEExpandMojo extends AbstractMojo {
         } catch (IOException e) {
             throw new MojoExecutionException("Failed during JDAE expansion", e);
         } finally {
-            // Restore previous context classloader
+            // back to previous context classloader
             Thread.currentThread().setContextClassLoader(prevCl);
         }
 

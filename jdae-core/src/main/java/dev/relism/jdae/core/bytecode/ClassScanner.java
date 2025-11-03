@@ -8,9 +8,9 @@ import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.MethodNode;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
+//import java.io.IOException;
+//import java.nio.file.Files;
+//import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -48,12 +48,13 @@ public class ClassScanner {
         for (AnnotationNode an : anns) {
             String desc = an.desc; // e.g., Lcom/example/MyAnnotation;
             String annotationClassName = Type.getType(desc).getClassName();
-            // We cannot load actual annotation type here; registry will verify @Expander presence using reflection/classpath
             out.add(new ExpanderCandidate(ownerId, annotationClassName, an));
         }
     }
 
+    /*
     public static byte[] readClass(Path p) throws IOException {
         return Files.readAllBytes(p);
     }
+     */
 }

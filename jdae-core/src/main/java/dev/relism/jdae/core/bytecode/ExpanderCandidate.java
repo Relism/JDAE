@@ -7,7 +7,7 @@ import org.objectweb.asm.tree.AnnotationNode;
  * that may be expanded.
  */
 public final class ExpanderCandidate {
-    private final String ownerId; // class or member identifier
+    private final String ownerId; // basically class or member identifier
     private final String annotationClassName;
     private final AnnotationNode rawAnnotation;
 

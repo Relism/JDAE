@@ -18,8 +18,6 @@
         <module>jdae-core</module>
         <module>jdae-processor</module>
         <module>jdae-maven-plugin</module>
-        <module>jdae-common-expanders</module>
-        <module>jdae-testing</module>
     </modules>
 
     <properties>
@@ -32,9 +30,6 @@
         <bytebuddy.version>1.14.10</bytebuddy.version>
         <javaparser.version>3.25.7</javaparser.version>
         <reflections.version>0.10.2</reflections.version>
-        <jakarta.annotation.version>2.1.1</jakarta.annotation.version>
-        <microprofile.openapi.version>3.1</microprofile.openapi.version>
-        <jackson.version>2.16.0</jackson.version>
 
         <!-- Maven plugin versions -->
         <maven.plugin.api.version>3.9.5</maven.plugin.api.version>
@@ -67,16 +62,6 @@
             <dependency>
                 <groupId>dev.relism</groupId>
                 <artifactId>jdae-maven-plugin</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>dev.relism</groupId>
-                <artifactId>jdae-common-expanders</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>dev.relism</groupId>
-                <artifactId>jdae-testing</artifactId>
                 <version>${project.version}</version>
             </dependency>
 
@@ -116,25 +101,6 @@
                 <groupId>org.reflections</groupId>
                 <artifactId>reflections</artifactId>
                 <version>${reflections.version}</version>
-            </dependency>
-
-            <!-- Jakarta/MicroProfile annotations (for common expanders) -->
-            <dependency>
-                <groupId>jakarta.annotation</groupId>
-                <artifactId>jakarta.annotation-api</artifactId>
-                <version>${jakarta.annotation.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.eclipse.microprofile.openapi</groupId>
-                <artifactId>microprofile-openapi-api</artifactId>
-                <version>${microprofile.openapi.version}</version>
-            </dependency>
-
-            <!-- Jackson for JSON serialization -->
-            <dependency>
-                <groupId>com.fasterxml.jackson.core</groupId>
-                <artifactId>jackson-databind</artifactId>
-                <version>${jackson.version}</version>
             </dependency>
 
             <!-- Maven plugin APIs -->

@@ -10,8 +10,10 @@ import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.MethodNode;
 
+import java.lang.reflect.Array;
 import java.util.Iterator;
 import java.util.List;
+import java.util.ArrayList;
 
 /**
  * Low-level ASM logic to remove and add annotations on class/members.
@@ -85,18 +87,55 @@ public class AnnotationRewriter {
         if (toInject == null || toInject.isEmpty()) return;
         if (list == null) throw new IllegalStateException("Target annotations list is null; ASM tree requires init");
         for (AnnotationDescriptor ad : toInject) {
-            String desc = Type.getObjectType(ad.getAnnotationClassName().replace('.', '/')).getDescriptor();
-            AnnotationNode an = new AnnotationNode(desc);
-            if (ad.getValues() != null) {
-                ad.getValues().forEach((k, v) -> {
-                    if (an.values == null) an.values = new java.util.ArrayList<>();
-                    an.values.add(k);
-                    an.values.add(v);
-                });
-            }
+            AnnotationNode an = toAnnotationNode(ad);
             list.add(an);
         }
     }
 
     // No longer loads classes reflectively; descriptors are derived from class names.
+
+    private AnnotationNode toAnnotationNode(AnnotationDescriptor ad) {
+        String desc = Type.getObjectType(ad.getAnnotationClassName().replace('.', '/')).getDescriptor();
+        AnnotationNode an = new AnnotationNode(desc);
+        ad.getValues().forEach((k, v) -> {
+            if (an.values == null) an.values = new ArrayList<>();
+            an.values.add(k);
+            an.values.add(toAsmValue(v));
+        });
+        return an;
+    }
+
+    private Object toAsmValue(Object v) {
+        if (v == null) return null;
+        if (v instanceof AnnotationDescriptor) {
+            return toAnnotationNode((AnnotationDescriptor) v);
+        }
+        if (v instanceof List<?> in) {
+            List<Object> out = new ArrayList<>(in.size());
+            for (Object o : in) {
+                out.add(toAsmValue(o));
+            }
+            return out;
+        }
+        if (v.getClass().isArray()) {
+            int len = Array.getLength(v);
+            List<Object> out = new ArrayList<>(len);
+            for (int i = 0; i < len; i++) {
+                Object elem = Array.get(v, i);
+                out.add(toAsmValue(elem));
+            }
+            return out;
+        }
+        if (v instanceof Class<?>) {
+            return Type.getType((Class<?>) v);
+        }
+        if (v instanceof Type) {
+            return v; // Already an ASM Type
+        }
+        if (v instanceof Enum<?> e) {
+            String enumDesc = Type.getObjectType(e.getDeclaringClass().getName().replace('.', '/')).getDescriptor();
+            return new String[]{enumDesc, e.name()};
+        }
+        return v;
+    }
 }

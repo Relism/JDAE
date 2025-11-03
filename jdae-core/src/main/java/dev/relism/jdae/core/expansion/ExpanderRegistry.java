@@ -1,10 +1,11 @@
 package dev.relism.jdae.core.expansion;
 
 import dev.relism.jdae.api.JDAEExpander;
-import dev.relism.jdae.api.annotations.ExpanderMarker;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.ServiceLoader;
@@ -18,15 +19,13 @@ public class ExpanderRegistry {
 
     public ExpanderRegistry(ClassLoader projectClassLoader) {
         this.projectClassLoader = projectClassLoader;
-        // Preload via ServiceLoader from the project's classloader if available
+        // Preload via ServiceLoader from the project's classloader: map expander -> its annotation type via generics
         if (projectClassLoader != null) {
             for (JDAEExpander<?> exp : ServiceLoader.load(JDAEExpander.class, projectClassLoader)) {
                 Class<?> impl = exp.getClass();
-                if (impl.isAnnotationPresent(ExpanderMarker.class)) {
-                    ExpanderMarker marker = impl.getAnnotation(ExpanderMarker.class);
-                    if (!marker.name().isEmpty()) {
-                        register(marker.name(), (Class<? extends JDAEExpander<?>>) impl);
-                    }
+                String annName = resolveAnnotationClassNameFromExpander(impl);
+                if (annName != null) {
+                    register(annName, (Class<? extends JDAEExpander<?>>) impl);
                 }
             }
         }
@@ -46,11 +45,7 @@ public class ExpanderRegistry {
             }
         }
         // Fallback: inspect the annotation type for @Expander meta-annotation
-        JDAEExpander<?> resolved = resolveFromAnnotation(annotationClassName);
-        if (resolved != null) {
-            return resolved;
-        }
-        return null;
+        return resolveFromAnnotation(annotationClassName);
     }
 
     private JDAEExpander<?> resolveFromAnnotation(String annotationClassName) {
@@ -68,6 +63,26 @@ public class ExpanderRegistry {
             }
         } catch (Exception e) {
             // ignore and fallback to null
+        }
+        return null;
+    }
+
+    private String resolveAnnotationClassNameFromExpander(Class<?> impl) {
+        // Walk interfaces and superclasses to find JDAEExpander<T> generic
+        for (Type t : impl.getGenericInterfaces()) {
+            if (t instanceof ParameterizedType pt) {
+                Type raw = pt.getRawType();
+                if (raw instanceof Class && JDAEExpander.class.isAssignableFrom((Class<?>) raw)) {
+                    Type arg = pt.getActualTypeArguments()[0];
+                    if (arg instanceof Class<?> ac) {
+                        return ac.getName();
+                    }
+                }
+            }
+        }
+        Class<?> sup = impl.getSuperclass();
+        if (sup != null && sup != Object.class) {
+            return resolveAnnotationClassNameFromExpander(sup);
         }
         return null;
     }
