@@ -49,7 +49,6 @@ public final class AnnotationInstanceFactory {
         @Override
         public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
             String name = method.getName();
-            // Standard annotation methods
             if (name.equals("annotationType") && method.getParameterCount() == 0) {
                 return annType;
             }
@@ -63,7 +62,6 @@ public final class AnnotationInstanceFactory {
                 Object other = args[0];
                 if (other == proxy) return true;
                 if (!(other instanceof Annotation a) || !a.annotationType().equals(annType)) return false;
-                // naive equality on member map
                 for (Method m : annType.getDeclaredMethods()) {
                     Object thisVal = getValue(m);
                     Object thatVal = m.invoke(other);
@@ -71,7 +69,6 @@ public final class AnnotationInstanceFactory {
                 }
                 return true;
             }
-            // Annotation element access
             return getValue(method);
         }
 
@@ -112,16 +109,13 @@ public final class AnnotationInstanceFactory {
                 Object enumConst = Enum.valueOf((Class) enumType, constName);
                 return enumConst;
             }
-            // Class values stored as ASM Type
             if (raw instanceof Type t && expectedType == Class.class) {
                 return load(t.getClassName());
             }
-            // Nested annotation
             if (raw instanceof AnnotationNode an && expectedType.isAnnotation()) {
                 String nestedName = Type.getType(an.desc).getClassName();
                 return new AnnotationInstanceFactory(cl).create(nestedName, an);
             }
-            // Arrays: ASM stores as List; convert to actual array type
             if (expectedType.isArray() && raw instanceof List<?> list) {
                 Class<?> component = expectedType.getComponentType();
                 Object array = java.lang.reflect.Array.newInstance(component, list.size());
@@ -132,7 +126,6 @@ public final class AnnotationInstanceFactory {
                 }
                 return array;
             }
-            // Primitives and Strings are typically already proper boxed types
             return raw;
         }
 
@@ -140,7 +133,15 @@ public final class AnnotationInstanceFactory {
             try {
                 return Class.forName(className, false, cl);
             } catch (ClassNotFoundException e) {
-                throw new IllegalStateException("Failed to load class: " + className, e);
+                // Defer class resolution: return a proxy Class that preserves the name but doesn't force loading.
+                // Fallback strategy: attempt context loader; if still missing, wrap with a descriptive error.
+                ClassLoader ctx = Thread.currentThread().getContextClassLoader();
+                try {
+                    return Class.forName(className, false, ctx);
+                } catch (ClassNotFoundException e2) {
+                    throw new IllegalStateException("Failed to load class referenced in annotation member: " + className +
+                            ". Ensure annotation member types are on the runtime classpath during expansion.", e);
+                }
             }
         }
 

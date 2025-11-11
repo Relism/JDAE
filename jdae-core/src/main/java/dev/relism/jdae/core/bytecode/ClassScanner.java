@@ -1,5 +1,9 @@
 package dev.relism.jdae.core.bytecode;
 
+import dev.relism.jdae.api.ClassInfo;
+import dev.relism.jdae.api.FieldInfo;
+import dev.relism.jdae.api.MethodInfo;
+import dev.relism.jdae.api.TargetKind;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
@@ -25,30 +29,57 @@ public class ClassScanner {
 
         List<ExpanderCandidate> candidates = new ArrayList<>();
 
-        addCandidatesFromAnnotations(candidates, cn.name, cn.visibleAnnotations);
-        addCandidatesFromAnnotations(candidates, cn.name, cn.invisibleAnnotations);
+        ClassInfo classInfo = new ClassInfo(cn.name, cn.name.replace('/', '.'), cn.access,
+                cn.superName != null ? cn.superName.replace('/', '.') : null,
+                cn.interfaces != null ? cn.interfaces.stream().map(i -> i.replace('/', '.')).toList() : List.of());
+
+        addCandidatesFromAnnotations(candidates, classInfo, null, null, TargetKind.CLASS, cn.visibleAnnotations);
+        addCandidatesFromAnnotations(candidates, classInfo, null, null, TargetKind.CLASS, cn.invisibleAnnotations);
 
         if (cn.fields != null) {
             for (FieldNode fn : cn.fields) {
-                addCandidatesFromAnnotations(candidates, cn.name + "#" + fn.name, fn.visibleAnnotations);
-                addCandidatesFromAnnotations(candidates, cn.name + "#" + fn.name, fn.invisibleAnnotations);
+                FieldInfo fieldInfo = new FieldInfo(fn.name, fn.desc, fn.access);
+                String ownerId = cn.name + "#" + fn.name;
+                addCandidatesFromAnnotations(candidates, classInfo, null, fieldInfo, TargetKind.FIELD, fn.visibleAnnotations);
+                addCandidatesFromAnnotations(candidates, classInfo, null, fieldInfo, TargetKind.FIELD, fn.invisibleAnnotations);
             }
         }
         if (cn.methods != null) {
             for (MethodNode mn : cn.methods) {
-                addCandidatesFromAnnotations(candidates, cn.name + "#" + mn.name + mn.desc, mn.visibleAnnotations);
-                addCandidatesFromAnnotations(candidates, cn.name + "#" + mn.name + mn.desc, mn.invisibleAnnotations);
+                MethodInfo methodInfo = new MethodInfo(
+                        mn.name,
+                        mn.desc,
+                        mn.access,
+                        Type.getArgumentTypes(mn.desc) != null ?
+                                java.util.Arrays.stream(Type.getArgumentTypes(mn.desc))
+                                        .map(t -> t.getClassName())
+                                        .toList() : List.of(),
+                        Type.getReturnType(mn.desc) != null ? Type.getReturnType(mn.desc).getClassName() : "void"
+                );
+                String ownerId = cn.name + "#" + mn.name + mn.desc;
+                addCandidatesFromAnnotations(candidates, classInfo, methodInfo, null, TargetKind.METHOD, mn.visibleAnnotations);
+                addCandidatesFromAnnotations(candidates, classInfo, methodInfo, null, TargetKind.METHOD, mn.invisibleAnnotations);
             }
         }
         return candidates;
     }
 
-    private void addCandidatesFromAnnotations(List<ExpanderCandidate> out, String ownerId, List<AnnotationNode> anns) {
+    private void addCandidatesFromAnnotations(List<ExpanderCandidate> out,
+                                              ClassInfo classInfo,
+                                              MethodInfo methodInfo,
+                                              FieldInfo fieldInfo,
+                                              TargetKind kind,
+                                              List<AnnotationNode> anns) {
         if (anns == null) return;
         for (AnnotationNode an : anns) {
             String desc = an.desc; // e.g., Lcom/example/MyAnnotation;
             String annotationClassName = Type.getType(desc).getClassName();
-            out.add(new ExpanderCandidate(ownerId, annotationClassName, an));
+            String ownerId = switch (kind) {
+                case CLASS -> classInfo.getInternalName();
+                case METHOD -> classInfo.getInternalName() + "#" + methodInfo.getName() + methodInfo.getDescriptor();
+                case FIELD -> classInfo.getInternalName() + "#" + fieldInfo.getName();
+            };
+            out.add(new ExpanderCandidate(ownerId, annotationClassName, an, kind, classInfo, methodInfo, fieldInfo));
         }
     }
 

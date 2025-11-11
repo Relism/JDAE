@@ -1,3 +1,4 @@
+// language: java
 package dev.relism.jdae.core.bytecode;
 
 import dev.relism.jdae.api.AnnotationDescriptor;
@@ -36,7 +37,36 @@ public class AnnotationRewriter {
             rewriteMembers(cn, ownerId, sourceAnnotationClassName, removeOriginal, toInject);
         }
 
-        ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_MAXS | ClassWriter.COMPUTE_FRAMES);
+        ClassWriter cw = new ContextClassWriter(ClassWriter.COMPUTE_MAXS | ClassWriter.COMPUTE_FRAMES);
+        cn.accept(cw);
+        return cw.toByteArray();
+    }
+
+    public byte[] rewrite(byte[] original, String ownerId, List<String> sourceAnnotationClassNames,
+                          boolean removeOriginal, List<AnnotationDescriptor> toInject) {
+        boolean anyRemoval = removeOriginal && sourceAnnotationClassNames != null && !sourceAnnotationClassNames.isEmpty();
+        boolean anyInjection = toInject != null && !toInject.isEmpty();
+        if (!anyRemoval && !anyInjection) {
+            return original; // no-op, avoid unnecessary writes
+        }
+
+        ClassNode cn = new ClassNode(Opcodes.ASM9);
+        new ClassReader(original).accept(cn, ClassReader.SKIP_FRAMES);
+
+        if (ownerId.equals(cn.name)) {
+            if (removeOriginal) {
+                for (String s : sourceAnnotationClassNames) {
+                    removeAnnotation(cn.visibleAnnotations, s);
+                    removeAnnotation(cn.invisibleAnnotations, s);
+                }
+            }
+            if (cn.visibleAnnotations == null) cn.visibleAnnotations = new java.util.ArrayList<>();
+            injectAnnotations(cn.visibleAnnotations, toInject);
+        } else {
+            rewriteMembers(cn, ownerId, sourceAnnotationClassNames, removeOriginal, toInject);
+        }
+
+        ClassWriter cw = new ContextClassWriter(ClassWriter.COMPUTE_MAXS | ClassWriter.COMPUTE_FRAMES);
         cn.accept(cw);
         return cw.toByteArray();
     }
@@ -71,6 +101,40 @@ public class AnnotationRewriter {
         }
     }
 
+    private void rewriteMembers(ClassNode cn, String ownerId, List<String> sourceAnnos, boolean removeOriginal,
+                                List<AnnotationDescriptor> toInject) {
+        if (cn.fields != null) {
+            for (FieldNode fn : cn.fields) {
+                String fid = cn.name + "#" + fn.name;
+                if (fid.equals(ownerId)) {
+                    if (removeOriginal) {
+                        for (String s : sourceAnnos) {
+                            removeAnnotation(fn.visibleAnnotations, s);
+                            removeAnnotation(fn.invisibleAnnotations, s);
+                        }
+                    }
+                    if (fn.visibleAnnotations == null) fn.visibleAnnotations = new java.util.ArrayList<>();
+                    injectAnnotations(fn.visibleAnnotations, toInject);
+                }
+            }
+        }
+        if (cn.methods != null) {
+            for (MethodNode mn : cn.methods) {
+                String mid = cn.name + "#" + mn.name + mn.desc;
+                if (mid.equals(ownerId)) {
+                    if (removeOriginal) {
+                        for (String s : sourceAnnos) {
+                            removeAnnotation(mn.visibleAnnotations, s);
+                            removeAnnotation(mn.invisibleAnnotations, s);
+                        }
+                    }
+                    if (mn.visibleAnnotations == null) mn.visibleAnnotations = new java.util.ArrayList<>();
+                    injectAnnotations(mn.visibleAnnotations, toInject);
+                }
+            }
+        }
+    }
+
     private void removeAnnotation(List<AnnotationNode> list, String className) {
         if (list == null) return;
         //String desc = Type.getDescriptor(descriptorToClass(className)); ?
@@ -92,7 +156,6 @@ public class AnnotationRewriter {
         }
     }
 
-    // No longer loads classes reflectively; descriptors are derived from class names.
 
     private AnnotationNode toAnnotationNode(AnnotationDescriptor ad) {
         String desc = Type.getObjectType(ad.getAnnotationClassName().replace('.', '/')).getDescriptor();
@@ -106,16 +169,22 @@ public class AnnotationRewriter {
     }
 
     private Object toAsmValue(Object v) {
-        if (v == null) return null;
-        if (v instanceof AnnotationDescriptor) {
-            return toAnnotationNode((AnnotationDescriptor) v);
-        }
-        if (v instanceof List<?> in) {
-            List<Object> out = new ArrayList<>(in.size());
-            for (Object o : in) {
-                out.add(toAsmValue(o));
+        switch (v) {
+            case null -> {
+                return null;
             }
-            return out;
+            case AnnotationDescriptor annotationDescriptor -> {
+                return toAnnotationNode(annotationDescriptor);
+            }
+            case List<?> in -> {
+                List<Object> out = new ArrayList<>(in.size());
+                for (Object o : in) {
+                    out.add(toAsmValue(o));
+                }
+                return out;
+            }
+            default -> {
+            }
         }
         if (v.getClass().isArray()) {
             int len = Array.getLength(v);
@@ -126,16 +195,59 @@ public class AnnotationRewriter {
             }
             return out;
         }
-        if (v instanceof Class<?>) {
-            return Type.getType((Class<?>) v);
-        }
-        if (v instanceof Type) {
-            return v; // Already an ASM Type
-        }
-        if (v instanceof Enum<?> e) {
-            String enumDesc = Type.getObjectType(e.getDeclaringClass().getName().replace('.', '/')).getDescriptor();
-            return new String[]{enumDesc, e.name()};
+        switch (v) {
+            case Class<?> aClass -> {
+                return Type.getType(aClass);
+            }
+            case Type type -> {
+                return v; // Already an ASM Type
+            }
+            case Enum<?> e -> {
+                String enumDesc = Type.getObjectType(e.getDeclaringClass().getName().replace('.', '/')).getDescriptor();
+                return new String[]{enumDesc, e.name()};
+            }
+            default -> {
+            }
         }
         return v;
+    }
+
+    /**
+     * ClassWriter that resolves classes using the current thread context classloader.
+     * This avoids ClassNotFoundException when ASM attempts to compute common superclasses
+     * while running inside the plugin classloader.
+     */
+    private static final class ContextClassWriter extends ClassWriter {
+        ContextClassWriter(int flags) {
+            super(flags);
+        }
+
+        @Override
+        protected String getCommonSuperClass(String type1, String type2) {
+            try {
+                ClassLoader cl = Thread.currentThread().getContextClassLoader();
+                String name1 = type1.replace('/', '.');
+                String name2 = type2.replace('/', '.');
+                Class<?> c1 = Class.forName(name1, false, cl);
+                Class<?> c2 = Class.forName(name2, false, cl);
+                if (c1.isAssignableFrom(c2)) {
+                    return type1;
+                }
+                if (c2.isAssignableFrom(c1)) {
+                    return type2;
+                }
+                if (c1.isInterface() || c2.isInterface()) {
+                    return "java/lang/Object";
+                }
+                Class<?> superClass = c1;
+                while (!superClass.isAssignableFrom(c2)) {
+                    superClass = superClass.getSuperclass();
+                }
+                return superClass.getName().replace('.', '/');
+            } catch (Throwable t) {
+                // Fallback to Object if any class cannot be loaded
+                return "java/lang/Object";
+            }
+        }
     }
 }

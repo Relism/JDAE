@@ -15,4 +15,9 @@ public class BytecodeExpander {
                         boolean removeOriginal, List<AnnotationDescriptor> inject) {
         return rewriter.rewrite(classBytes, ownerId, sourceAnnotationClassName, removeOriginal, inject);
     }
+
+    public byte[] apply(byte[] classBytes, String ownerId, java.util.List<String> sourceAnnotationClassNames,
+                        boolean removeOriginal, List<AnnotationDescriptor> inject) {
+        return rewriter.rewrite(classBytes, ownerId, sourceAnnotationClassNames, removeOriginal, inject);
+    }
 }

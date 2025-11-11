@@ -12,11 +12,9 @@ public interface AnnotationBuilder {
     // Preferred member setter
     AnnotationBuilder member(String name, Object val);
 
-    // Add a nested annotation member
     AnnotationBuilder nested(String name, String annotationClassName, Consumer<AnnotationBuilder> consumer);
     AnnotationBuilder nested(String name, Class<?> annotationClass, Consumer<AnnotationBuilder> consumer);
 
-    // Add an array of nested annotations
     AnnotationBuilder nestedArray(String name, AnnotationBuilder... nestedBuilders);
 
     AnnotationDescriptor build();

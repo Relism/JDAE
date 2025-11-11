@@ -1,5 +1,0 @@
-jdk:
-  - openjdk17
-
-install:
-  - mvn -B -DskipTests -pl jdae-api,jdae-core,jdae-processor,jdae-maven-plugin -am install
