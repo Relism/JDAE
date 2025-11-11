@@ -25,6 +25,14 @@ To use JDAE in your project, you first need to add the api dependency to your pr
 For maven, add the following to your `pom.xml`:
 
 ```xml
+<repository>
+    <id>reposilite-repository-releases</id>
+    <name>Reposilite Repository</name>
+    <url>https://maven.relism.dev/releases</url>
+</repository>
+```
+
+```xml
 <dependency>
     <groupId>dev.relism</groupId>
     <artifactId>jdae-api</artifactId>
@@ -32,6 +40,14 @@ For maven, add the following to your `pom.xml`:
 </dependency>
 ```
 For gradle, add the following to your `build.gradle`:
+
+```groovy
+repositories {
+    maven {
+        url 'https://maven.relism.dev/releases'
+    }
+}
+```
 
 ```groovy
 implementation 'dev.relism:jdae-api:VERSION'
