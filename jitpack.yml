@@ -6,6 +6,8 @@ install:
   # maven-plugin writes its own coordinates into META-INF/maven/plugin.xml as it builds, and Maven
   # refuses a plugin whose descriptor disagrees with the coordinates it was resolved under. The
   # POMs stay plain dev.relism; the build takes JitPack's coordinates here, and only here.
+  # $VERSION is the version being served, so a tag or a commit build is usable as a plugin. A
+  # <branch>-SNAPSHOT alias is not: it resolves to a build number the build cannot know.
   - sed -i 's|<groupId>dev.relism</groupId>|<groupId>com.github.Relism.JDAE</groupId>|g' pom.xml */pom.xml
-  - mvn -B -q org.codehaus.mojo:versions-maven-plugin:2.18.0:set -DnewVersion=${VERSION:-$(git describe --tags --always)} -DgenerateBackupPoms=false
+  - OLD=$(sed -n 's|.*<version>\(.*\)</version>.*|\1|p' pom.xml | head -1); sed -i "s|<version>$OLD</version>|<version>${VERSION:-$(git describe --tags --always)}</version>|g" pom.xml */pom.xml
   - mvn -B -DskipTests install
