@@ -1,0 +1,11 @@
+jdk:
+  - openjdk21
+
+install:
+  # JitPack serves this repository's modules as com.github.Relism.JDAE:<module>:<version>, but a
+  # maven-plugin writes its own coordinates into META-INF/maven/plugin.xml as it builds, and Maven
+  # refuses a plugin whose descriptor disagrees with the coordinates it was resolved under. The
+  # POMs stay plain dev.relism; the build takes JitPack's coordinates here, and only here.
+  - sed -i 's|<groupId>dev.relism</groupId>|<groupId>com.github.Relism.JDAE</groupId>|g' pom.xml */pom.xml
+  - mvn -B -q org.codehaus.mojo:versions-maven-plugin:2.18.0:set -DnewVersion=${VERSION:-$(git describe --tags --always)} -DgenerateBackupPoms=false
+  - mvn -B -DskipTests install
