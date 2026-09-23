@@ -18,7 +18,7 @@ JitPack builds it from the tag. Both the API and the plugin come from there:
 
 ```xml
 <properties>
-    <jdae.version>v1.2.0</jdae.version>
+    <jdae.version>v1.2.1</jdae.version>
 </properties>
 
 <repositories>
