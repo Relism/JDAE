@@ -1,7 +1,4 @@
 package dev.relism.jdae.api;
 
-public enum TargetKind {
-    CLASS,
-    METHOD,
-    FIELD
-}
+/** What an expander annotation was found on. */
+public enum TargetKind { CLASS, METHOD, FIELD }

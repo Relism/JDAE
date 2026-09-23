@@ -9,83 +9,50 @@ import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AnnotationNode;
 import org.objectweb.asm.tree.ClassNode;
-import org.objectweb.asm.tree.FieldNode;
-import org.objectweb.asm.tree.MethodNode;
 
-//import java.io.IOException;
-//import java.nio.file.Files;
-//import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
-/**
- * Scans bytecode to find members annotated with annotations marked by @Expander.
- */
-public class ClassScanner {
+/** Reads a class file into the targets an expansion can act on. */
+public final class ClassScanner {
 
-    public List<ExpanderCandidate> scan(byte[] classBytes) {
+    public List<Target> scan(byte[] classBytes) {
         ClassNode cn = new ClassNode(Opcodes.ASM9);
-        new ClassReader(classBytes).accept(cn, ClassReader.SKIP_FRAMES);
-
-        List<ExpanderCandidate> candidates = new ArrayList<>();
+        new ClassReader(classBytes).accept(cn, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
 
         ClassInfo classInfo = new ClassInfo(cn.name, cn.name.replace('/', '.'), cn.access,
-                cn.superName != null ? cn.superName.replace('/', '.') : null,
-                cn.interfaces != null ? cn.interfaces.stream().map(i -> i.replace('/', '.')).toList() : List.of());
+                cn.superName == null ? null : cn.superName.replace('/', '.'),
+                cn.interfaces == null ? List.of() : cn.interfaces.stream().map(i -> i.replace('/', '.')).toList());
 
-        addCandidatesFromAnnotations(candidates, classInfo, null, null, TargetKind.CLASS, cn.visibleAnnotations);
-        addCandidatesFromAnnotations(candidates, classInfo, null, null, TargetKind.CLASS, cn.invisibleAnnotations);
+        List<Target> targets = new ArrayList<>();
+        targets.add(new Target(cn.name, TargetKind.CLASS, classInfo, null, null,
+                both(cn.visibleAnnotations, cn.invisibleAnnotations)));
 
         if (cn.fields != null) {
-            for (FieldNode fn : cn.fields) {
-                FieldInfo fieldInfo = new FieldInfo(fn.name, fn.desc, fn.access);
-                String ownerId = cn.name + "#" + fn.name;
-                addCandidatesFromAnnotations(candidates, classInfo, null, fieldInfo, TargetKind.FIELD, fn.visibleAnnotations);
-                addCandidatesFromAnnotations(candidates, classInfo, null, fieldInfo, TargetKind.FIELD, fn.invisibleAnnotations);
-            }
+            cn.fields.forEach(f -> targets.add(new Target(cn.name + "#" + f.name, TargetKind.FIELD, classInfo, null,
+                    new FieldInfo(f.name, f.desc, f.access), both(f.visibleAnnotations, f.invisibleAnnotations))));
         }
         if (cn.methods != null) {
-            for (MethodNode mn : cn.methods) {
-                MethodInfo methodInfo = new MethodInfo(
-                        mn.name,
-                        mn.desc,
-                        mn.access,
-                        Type.getArgumentTypes(mn.desc) != null ?
-                                java.util.Arrays.stream(Type.getArgumentTypes(mn.desc))
-                                        .map(t -> t.getClassName())
-                                        .toList() : List.of(),
-                        Type.getReturnType(mn.desc) != null ? Type.getReturnType(mn.desc).getClassName() : "void"
-                );
-                String ownerId = cn.name + "#" + mn.name + mn.desc;
-                addCandidatesFromAnnotations(candidates, classInfo, methodInfo, null, TargetKind.METHOD, mn.visibleAnnotations);
-                addCandidatesFromAnnotations(candidates, classInfo, methodInfo, null, TargetKind.METHOD, mn.invisibleAnnotations);
-            }
+            cn.methods.forEach(m -> targets.add(new Target(cn.name + "#" + m.name + m.desc, TargetKind.METHOD, classInfo,
+                    new MethodInfo(m.name, m.desc, m.access,
+                            Arrays.stream(Type.getArgumentTypes(m.desc)).map(Type::getClassName).toList(),
+                            Type.getReturnType(m.desc).getClassName()),
+                    null, both(m.visibleAnnotations, m.invisibleAnnotations))));
         }
-        return candidates;
+        return targets;
     }
 
-    private void addCandidatesFromAnnotations(List<ExpanderCandidate> out,
-                                              ClassInfo classInfo,
-                                              MethodInfo methodInfo,
-                                              FieldInfo fieldInfo,
-                                              TargetKind kind,
-                                              List<AnnotationNode> anns) {
-        if (anns == null) return;
-        for (AnnotationNode an : anns) {
-            String desc = an.desc; // e.g., Lcom/example/MyAnnotation;
-            String annotationClassName = Type.getType(desc).getClassName();
-            String ownerId = switch (kind) {
-                case CLASS -> classInfo.getInternalName();
-                case METHOD -> classInfo.getInternalName() + "#" + methodInfo.getName() + methodInfo.getDescriptor();
-                case FIELD -> classInfo.getInternalName() + "#" + fieldInfo.getName();
-            };
-            out.add(new ExpanderCandidate(ownerId, annotationClassName, an, kind, classInfo, methodInfo, fieldInfo));
-        }
+    /** The name an ASM descriptor stands for, e.g. {@code Lcom/acme/A;} to {@code com.acme.A}. */
+    public static String nameOf(AnnotationNode node) {
+        return Type.getType(node.desc).getClassName();
     }
 
-    /*
-    public static byte[] readClass(Path p) throws IOException {
-        return Files.readAllBytes(p);
+    private static List<AnnotationNode> both(List<AnnotationNode> visible, List<AnnotationNode> invisible) {
+        if (visible == null && invisible == null) return List.of();
+        List<AnnotationNode> all = new ArrayList<>();
+        if (visible != null) all.addAll(visible);
+        if (invisible != null) all.addAll(invisible);
+        return all;
     }
-     */
 }

@@ -7,7 +7,7 @@
 
     <groupId>dev.relism</groupId>
     <artifactId>jdae-parent</artifactId>
-    <version>v1.0.5h</version>
+    <version>1.2.0</version>
     <packaging>pom</packaging>
 
     <name>JDAE - Java Dynamic Annotation Expander</name>
@@ -16,45 +16,21 @@
     <modules>
         <module>jdae-api</module>
         <module>jdae-core</module>
-        <module>jdae-processor</module>
         <module>jdae-maven-plugin</module>
     </modules>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <maven.compiler.source>21</maven.compiler.source>
-        <maven.compiler.target>21</maven.compiler.target>
+        <maven.compiler.release>21</maven.compiler.release>
 
-        <!-- Dependency versions -->
-        <asm.version>9.6</asm.version>
-        <bytebuddy.version>1.14.10</bytebuddy.version>
-        <javaparser.version>3.25.7</javaparser.version>
-        <reflections.version>0.10.2</reflections.version>
-
-        <!-- Maven plugin versions -->
-        <maven.plugin.api.version>3.9.5</maven.plugin.api.version>
+        <asm.version>9.7.1</asm.version>
+        <maven.version>3.9.6</maven.version>
         <maven.plugin.annotations.version>3.10.2</maven.plugin.annotations.version>
-
-        <!-- Testing -->
-        <junit.version>5.10.1</junit.version>
-        <assertj.version>3.24.2</assertj.version>
-        <mockito.version>5.7.0</mockito.version>
+        <junit.version>5.11.0</junit.version>
     </properties>
-
-    <distributionManagement>
-        <repository>
-            <id>reposilite</id>
-            <url>https://maven.relism.dev/releases</url>
-        </repository>
-        <snapshotRepository>
-            <id>reposilite</id>
-            <url>https://maven.relism.dev/snapshots</url>
-        </snapshotRepository>
-    </distributionManagement>
 
     <dependencyManagement>
         <dependencies>
-            <!-- Internal modules -->
             <dependency>
                 <groupId>dev.relism</groupId>
                 <artifactId>jdae-api</artifactId>
@@ -65,60 +41,25 @@
                 <artifactId>jdae-core</artifactId>
                 <version>${project.version}</version>
             </dependency>
-            <dependency>
-                <groupId>dev.relism</groupId>
-                <artifactId>jdae-processor</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>dev.relism</groupId>
-                <artifactId>jdae-maven-plugin</artifactId>
-                <version>${project.version}</version>
-            </dependency>
 
-            <!-- ASM for bytecode manipulation -->
+            <!-- asm-tree carries the annotation trees this rewrites; asm comes with it. -->
             <dependency>
                 <groupId>org.ow2.asm</groupId>
-                <artifactId>asm</artifactId>
-                <version>${asm.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.ow2.asm</groupId>
-                <artifactId>asm-commons</artifactId>
-                <version>${asm.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.ow2.asm</groupId>
-                <artifactId>asm-util</artifactId>
+                <artifactId>asm-tree</artifactId>
                 <version>${asm.version}</version>
             </dependency>
 
-            <!-- ByteBuddy (alternative/complement to ASM) -->
-            <dependency>
-                <groupId>net.bytebuddy</groupId>
-                <artifactId>byte-buddy</artifactId>
-                <version>${bytebuddy.version}</version>
-            </dependency>
-
-            <!-- JavaParser for source manipulation (if needed) -->
-            <dependency>
-                <groupId>com.github.javaparser</groupId>
-                <artifactId>javaparser-core</artifactId>
-                <version>${javaparser.version}</version>
-            </dependency>
-
-            <!-- Reflections for classpath scanning -->
-            <dependency>
-                <groupId>org.reflections</groupId>
-                <artifactId>reflections</artifactId>
-                <version>${reflections.version}</version>
-            </dependency>
-
-            <!-- Maven plugin APIs -->
             <dependency>
                 <groupId>org.apache.maven</groupId>
                 <artifactId>maven-plugin-api</artifactId>
-                <version>${maven.plugin.api.version}</version>
+                <version>${maven.version}</version>
+                <scope>provided</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.maven</groupId>
+                <artifactId>maven-core</artifactId>
+                <version>${maven.version}</version>
+                <scope>provided</scope>
             </dependency>
             <dependency>
                 <groupId>org.apache.maven.plugin-tools</groupId>
@@ -126,30 +67,11 @@
                 <version>${maven.plugin.annotations.version}</version>
                 <scope>provided</scope>
             </dependency>
-            <dependency>
-                <groupId>org.apache.maven</groupId>
-                <artifactId>maven-core</artifactId>
-                <version>${maven.plugin.api.version}</version>
-                <scope>provided</scope>
-            </dependency>
 
-            <!-- Testing -->
             <dependency>
                 <groupId>org.junit.jupiter</groupId>
                 <artifactId>junit-jupiter</artifactId>
                 <version>${junit.version}</version>
-                <scope>test</scope>
-            </dependency>
-            <dependency>
-                <groupId>org.assertj</groupId>
-                <artifactId>assertj-core</artifactId>
-                <version>${assertj.version}</version>
-                <scope>test</scope>
-            </dependency>
-            <dependency>
-                <groupId>org.mockito</groupId>
-                <artifactId>mockito-core</artifactId>
-                <version>${mockito.version}</version>
                 <scope>test</scope>
             </dependency>
         </dependencies>
@@ -161,22 +83,17 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-compiler-plugin</artifactId>
-                    <version>3.11.0</version>
-                    <configuration>
-                        <source>21</source>
-                        <target>21</target>
-                        <encoding>UTF-8</encoding>
-                    </configuration>
+                    <version>3.13.0</version>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-surefire-plugin</artifactId>
-                    <version>3.2.2</version>
+                    <version>3.2.5</version>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-plugin-plugin</artifactId>
-                    <version>3.10.2</version>
+                    <version>3.13.1</version>
                 </plugin>
             </plugins>
         </pluginManagement>

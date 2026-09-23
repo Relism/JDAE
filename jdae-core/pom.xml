@@ -7,32 +7,24 @@
     <parent>
         <groupId>dev.relism</groupId>
         <artifactId>jdae-parent</artifactId>
-        <version>v1.0.5h</version>
+        <version>1.2.0</version>
     </parent>
 
     <artifactId>jdae-core</artifactId>
+    <description>The expansion itself: scanning, validation and the bytecode rewrite.</description>
 
     <dependencies>
         <dependency>
             <groupId>dev.relism</groupId>
             <artifactId>jdae-api</artifactId>
         </dependency>
-        <!-- ASM for bytecode scanning and rewriting -->
         <dependency>
             <groupId>org.ow2.asm</groupId>
-            <artifactId>asm</artifactId>
+            <artifactId>asm-tree</artifactId>
         </dependency>
         <dependency>
-            <groupId>org.ow2.asm</groupId>
-            <artifactId>asm-commons</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.ow2.asm</groupId>
-            <artifactId>asm-util</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.reflections</groupId>
-            <artifactId>reflections</artifactId>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
         </dependency>
     </dependencies>
 </project>

@@ -1,9 +1,11 @@
 package dev.relism.jdae.core.expansion;
 
+import dev.relism.jdae.api.ExpansionException;
 import dev.relism.jdae.api.JDAEExpander;
+import dev.relism.jdae.api.annotations.Expander;
 
 import java.lang.annotation.Annotation;
-import java.lang.reflect.Method;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.HashMap;
@@ -11,133 +13,91 @@ import java.util.Map;
 import java.util.ServiceLoader;
 
 /**
- * Discovers and provides instances of JDAEExpander by annotation type.
+ * Which expander answers for which annotation.
+ *
+ * <p>An annotation type names its expander with {@link Expander}; a {@link ServiceLoader} entry
+ * for {@link JDAEExpander} registers one as well, matched by its type argument. Anything found
+ * and then unusable — an expander that cannot be loaded or constructed — fails the build rather
+ * than quietly expanding nothing.
  */
-public class ExpanderRegistry {
-    private final Map<String, Class<? extends JDAEExpander<?>>> byAnnotation = new HashMap<>();
-    private final Map<String, ExpanderMeta> metaByAnnotation = new HashMap<>();
-    private final ClassLoader projectClassLoader;
+public final class ExpanderRegistry {
 
-    public ExpanderRegistry(ClassLoader projectClassLoader) {
-        this.projectClassLoader = projectClassLoader;
-        // map expander -> its annotation type via generics
-        if (projectClassLoader != null) {
-            for (JDAEExpander<?> exp : ServiceLoader.load(JDAEExpander.class, projectClassLoader)) {
-                Class<?> impl = exp.getClass();
-                String annName = resolveAnnotationClassNameFromExpander(impl);
-                if (annName != null) {
-                    register(annName, (Class<? extends JDAEExpander<?>>) impl);
-                    // and cache the meta too
-                    metaByAnnotation.computeIfAbsent(annName, this::resolveExpanderMetaFromAnnotation);
-                }
-            }
+    /** An annotation that expands, and what happens to it afterwards. */
+    public record Spec(Class<? extends JDAEExpander<?>> expander, boolean keepOriginal) {}
+
+    private final ClassLoader loader;
+    private final Map<String, Spec> registered = new HashMap<>();
+    private final Map<String, Spec> resolved = new HashMap<>();
+
+    @SuppressWarnings("unchecked")
+    public ExpanderRegistry(ClassLoader loader) {
+        this.loader = loader;
+        if (loader == null) return;
+        for (JDAEExpander<?> expander : ServiceLoader.load(JDAEExpander.class, loader)) {
+            String annotation = annotationOf(expander.getClass());
+            if (annotation != null) register(annotation, (Class<? extends JDAEExpander<?>>) expander.getClass());
         }
     }
 
-    public void register(String annotationClassName, Class<? extends JDAEExpander<?>> expanderClass) {
-        byAnnotation.put(annotationClassName, expanderClass);
-        metaByAnnotation.computeIfAbsent(annotationClassName, this::resolveExpanderMetaFromAnnotation);
+    public void register(String annotationClassName, Class<? extends JDAEExpander<?>> expander) {
+        registered.put(annotationClassName, new Spec(expander, keepOriginal(annotationClassName)));
     }
 
-    public JDAEExpander<?> get(String annotationClassName) {
-        Class<? extends JDAEExpander<?>> cls = byAnnotation.get(annotationClassName);
-        if (cls != null) {
-            try {
-                return cls.getDeclaredConstructor().newInstance();
-            } catch (Exception e) {
-                throw new IllegalStateException("Failed to instantiate expander for " + annotationClassName, e);
-            }
-        }
-        // fallback
-        ExpanderMeta meta = metaByAnnotation.computeIfAbsent(annotationClassName, this::resolveExpanderMetaFromAnnotation);
-        if (meta != null && meta.expanderClass != null) {
-            try {
-                return meta.expanderClass.getDeclaredConstructor().newInstance();
-            } catch (Exception e) {
-                throw new IllegalStateException("Failed to instantiate expander for " + annotationClassName, e);
-            }
-        }
-        return null;
+    /** How this annotation expands, or null when it is an ordinary annotation. */
+    public Spec specFor(String annotationClassName) {
+        return resolved.computeIfAbsent(annotationClassName, name -> {
+            Spec known = registered.get(name);
+            return known != null ? known : fromMetaAnnotation(name);
+        });
     }
 
-    public boolean hasExpander(String annotationClassName) {
-        if (byAnnotation.containsKey(annotationClassName)) return true;
-        ExpanderMeta meta = metaByAnnotation.computeIfAbsent(annotationClassName, this::resolveExpanderMetaFromAnnotation);
-        return meta != null && meta.expanderClass != null;
-    }
-
-    /**
-     * Resolve Expander metadata (expander class, keepOriginal, id) from the annotation type's @Expander meta-annotation.
-     */
-    private ExpanderMeta resolveExpanderMetaFromAnnotation(String annotationClassName) {
-        if (projectClassLoader == null) return null;
+    /** A new expander for each target, so one cannot carry state into the next. */
+    public JDAEExpander<?> instantiate(Spec spec, String annotationClassName) {
         try {
-            Class<?> annType = Class.forName(annotationClassName, false, projectClassLoader);
-            for (Annotation a : annType.getAnnotations()) {
-                if (a.annotationType().getName().equals("dev.relism.jdae.api.annotations.Expander")) {
-                    Method valueMethod = a.annotationType().getMethod("value");
-                    Method keepOriginalMethod = a.annotationType().getMethod("keepOriginal");
-                    Method idMethod = a.annotationType().getMethod("id");
-                    Object val = valueMethod.invoke(a);
-                    boolean keepOriginal = (Boolean) keepOriginalMethod.invoke(a);
-                    String id = (String) idMethod.invoke(a);
-                    Class<? extends JDAEExpander<?>> typed = null;
-                    if (val instanceof Class<?> expClass) {
-                        @SuppressWarnings("unchecked")
-                        Class<? extends JDAEExpander<?>> cast = (Class<? extends JDAEExpander<?>>) expClass;
-                        try {
-                            Class.forName(cast.getName(), false, projectClassLoader);
-                            typed = cast;
-                        } catch (ClassNotFoundException cnf) {
-                            // expander not resolvable; leave typed as null
-                        }
-                    }
-                    return new ExpanderMeta(typed, keepOriginal, id);
-                }
+            Constructor<? extends JDAEExpander<?>> constructor = spec.expander().getDeclaredConstructor();
+            constructor.setAccessible(true);   // an expander beside its annotation needs no modifier
+            return constructor.newInstance();
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            throw new ExpansionException("The expander for @" + annotationClassName + ", "
+                    + spec.expander().getName() + ", could not be constructed. It needs a no-argument constructor.", e);
+        }
+    }
+
+    private Spec fromMetaAnnotation(String annotationClassName) {
+        Expander expander = expanderOf(annotationClassName);
+        if (expander == null) return null;
+        Class<? extends JDAEExpander<?>> type;
+        try {
+            type = expander.value();
+        } catch (TypeNotPresentException absent) {
+            throw new ExpansionException("The expander @" + annotationClassName + " names is not on the compile classpath", absent);
+        }
+        return new Spec(type, expander.keepOriginal());
+    }
+
+    private boolean keepOriginal(String annotationClassName) {
+        Expander expander = expanderOf(annotationClassName);
+        return expander != null && expander.keepOriginal();
+    }
+
+    private Expander expanderOf(String annotationClassName) {
+        try {
+            return Class.forName(annotationClassName, false, loader).getAnnotation(Expander.class);
+        } catch (ClassNotFoundException | LinkageError absent) {
+            return null;   // an annotation this build cannot see cannot be one of ours
+        }
+    }
+
+    private static String annotationOf(Class<?> expander) {
+        for (Type implemented : expander.getGenericInterfaces()) {
+            if (implemented instanceof ParameterizedType parameterized
+                    && parameterized.getRawType() == JDAEExpander.class
+                    && parameterized.getActualTypeArguments()[0] instanceof Class<?> annotation
+                    && Annotation.class.isAssignableFrom(annotation)) {
+                return annotation.getName();
             }
-        } catch (Exception e) {
-            // ignore and fallback to null
         }
-        return null;
-    }
-
-    private String resolveAnnotationClassNameFromExpander(Class<?> impl) {
-        for (Type t : impl.getGenericInterfaces()) {
-            if (t instanceof ParameterizedType pt) {
-                Type raw = pt.getRawType();
-                if (raw instanceof Class && JDAEExpander.class.isAssignableFrom((Class<?>) raw)) {
-                    Type arg = pt.getActualTypeArguments()[0];
-                    if (arg instanceof Class<?> ac) {
-                        return ac.getName();
-                    }
-                }
-            }
-        }
-        Class<?> sup = impl.getSuperclass();
-        if (sup != null && sup != Object.class) {
-            return resolveAnnotationClassNameFromExpander(sup);
-        }
-        return null;
-    }
-
-    /**
-     * Return true if the annotation type's @Expander declares keepOriginal=false.
-     * Defaults to false (do not remove) when metadata is unavailable.
-     */
-    public boolean shouldRemoveOriginal(String annotationClassName) {
-        ExpanderMeta meta = metaByAnnotation.computeIfAbsent(annotationClassName, this::resolveExpanderMetaFromAnnotation);
-        return meta != null && !meta.keepOriginal;
-    }
-
-    private static final class ExpanderMeta {
-        final Class<? extends JDAEExpander<?>> expanderClass;
-        final boolean keepOriginal;
-        final String id;
-
-        ExpanderMeta(Class<? extends JDAEExpander<?>> expanderClass, boolean keepOriginal, String id) {
-            this.expanderClass = expanderClass;
-            this.keepOriginal = keepOriginal;
-            this.id = id;
-        }
+        Class<?> parent = expander.getSuperclass();
+        return parent == null || parent == Object.class ? null : annotationOf(parent);
     }
 }

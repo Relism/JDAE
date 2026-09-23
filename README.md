@@ -1,225 +1,137 @@
-# Java Dynamic Annotation Expansion
-[![Relism Repository](https://img.shields.io/badge/dynamic/xml?url=https%3A%2F%2Fmaven.relism.dev%2Freleases%2Fdev%2Frelism%2Fjdae-api%2Fmaven-metadata.xml&query=%2Fmetadata%2Fversioning%2Fversions%2Fversion%5Blast()%5D&style=flat-square&label=Latest%20Release&link=https%3A%2F%2Fmaven.relism.dev%2F%23%2Freleases%2Fdev%2Frelism%2Fjdae-api
-)](https://maven.relism.dev/#/releases/dev/relism/jdae-api)
-[![License: MIT](https://img.shields.io/github/license/Relism/JDAE)](LICENSE)
-### A metaprogramming Java library for post-compile dynamic annotation expansion.
+# JDAE — Java Dynamic Annotation Expansion
 
-----------
+One small annotation on your code, the annotations it stands for in the class file. JDAE runs
+after compilation, replaces each annotation you mark with whatever its expander builds, and checks
+the result against the annotation types it writes — so what reaches the JVM is what you would have
+written by hand, without writing it.
 
-## About Annotation Expansion
-**Annotation expansion** is the process of programmatically transforming and replacing lightweight _"expander"_ annotations
-with more complex or multiple annotations during compilation.
+It earns its place where annotations are verbose, repetitive and conditional: OpenAPI
+documentation, persistence mapping, validation groups, anything where the same block is copied
+across handlers with two words changed.
 
-This approach is especially valuable for reducing repetitive boilerplate and for handling intricate
-configurations that depend on multiple contextual conditions, all without sacrificing type safety or
-compile-time validation.
+> Early days: the API still moves between minor versions, and there is no Gradle plugin yet.
+> Issues and pull requests welcome.
 
-## ⚠️ Note
-This library is still in **early development**. The API may change significantly in future releases.
-I'm by no means an expert in Java annotation processing: feedback, issues, and pull requests are very welcome!
+## Install
 
-## Usage
-
-### Installation
-To use JDAE in your project, you first need to add the api dependency to your project.
-For maven, add the following to your `pom.xml`:
+JitPack builds it from the tag. Both the API and the plugin come from there:
 
 ```xml
-<repository>
-    <id>reposilite-repository-releases</id>
-    <name>Reposilite Repository</name>
-    <url>https://maven.relism.dev/releases</url>
-</repository>
+<properties>
+    <jdae.version>v1.2.0</jdae.version>
+</properties>
+
+<repositories>
+    <repository><id>jitpack.io</id><url>https://jitpack.io</url></repository>
+</repositories>
+<pluginRepositories>
+    <pluginRepository><id>jitpack.io</id><url>https://jitpack.io</url></pluginRepository>
+</pluginRepositories>
+
+<dependencies>
+    <!-- Expanders compile against this; nothing needs it at runtime. -->
+    <dependency>
+        <groupId>com.github.Relism.JDAE</groupId>
+        <artifactId>jdae-api</artifactId>
+        <version>${jdae.version}</version>
+        <scope>provided</scope>
+    </dependency>
+</dependencies>
+
+<build><plugins>
+    <plugin>
+        <groupId>com.github.Relism.JDAE</groupId>
+        <artifactId>jdae-maven-plugin</artifactId>
+        <version>${jdae.version}</version>
+        <executions><execution><goals><goal>expand-annotations</goal></goals></execution></executions>
+    </plugin>
+</plugins></build>
 ```
 
-```xml
-<dependency>
-    <groupId>dev.relism</groupId>
-    <artifactId>jdae-api</artifactId>
-    <version>VERSION</version>
-</dependency>
-```
-For gradle, add the following to your `build.gradle`:
+The goal binds to `process-classes`, so tests and packaging already see the expanded classes.
+`-Djdae.skip` turns it off. The version is the tag, `v` included: JitPack does not strip it.
 
-```groovy
-repositories {
-    maven {
-        url 'https://maven.relism.dev/releases'
-    }
-}
-```
+## Writing one
 
-```groovy
-implementation 'dev.relism:jdae-api:VERSION'
-```
-
-Next, you need to add the maven plugin to your `pom.xml`:
-
-```xml
-<plugin>
-    <groupId>dev.relism</groupId>
-    <artifactId>jdae-maven-plugin</artifactId>
-    <version>${jdae.version}</version>
-    <extensions>true</extensions>
-    <executions>
-        <execution>
-            <goals>
-                <goal>expand-annotations</goal>
-            </goals>
-        </execution>
-    </executions>
-    <configuration>
-        <removeOriginal>true</removeOriginal>
-    </configuration>
-</plugin>
-```
-
-For gradle, add the following to your `build.gradle`:
-
-```groovy
-plugins {
-    id 'dev.relism.jdae' version 'VERSION'
-}
-```
-
-## Example
-For a simple yet meaningful example, consider the following scenario:
-You are developing a Jakarta EE application (e.g. using Spring Boot, Micronaut, or Quarkus) that generates OpenAPI documentation through SmallRye OpenAPI or Springdoc.
-
-Suppose you want to document a REST endpoint that returns a paginated list of users.
-Normally, the corresponding annotation setup would look like this:
+An annotation names its expander, and the expander builds what it stands for:
 
 ```java
-@GET
-@ApiResponse(
-        responseCode = "200",
-        description = "My description",
-        content = {
-                @Content(
-                        schema = @Schema(
-                                implementation = User.class,
-                                type = SchemaType.ARRAY,
-                                name = "User"
-                        )
-                )
-        },
-        headers = {
-                @Header(
-                        name = "X-Page",
-                        description = "Current page index (0-based)",
-                        schema = @Schema(type = SchemaType.INTEGER)
-                ),
-                @Header(
-                        name = "X-Page-Size",
-                        description = "Number of 'User' per page",
-                        schema = @Schema(type = SchemaType.INTEGER)
-                ),
-                @Header(
-                        name = "X-Total-Count",
-                        description = "Total number of 'User' available",
-                        schema = @Schema(type = SchemaType.INTEGER)
-                )
-        }
-)
-public List<User> getUsers() {
-    // ...
-}
-```
-
-This setup is quite verbose and repetitive, especially if you have multiple endpoints that return paginated lists of different entities.
-To simplify this, you can define a custom expander annotation `@ArrayResponse` that automatically expands into the necessary OpenAPI annotations.
-
-```java
-@Expander(value = ArrayResponseExpander.class)
+@Expander(ListResponseExpander.class)
 @Retention(RetentionPolicy.RUNTIME)
-@Target(ElementType.METHOD)
-public @interface ArrayResponse {
-    String responseCode() default "200";
+@Target(ElementType.TYPE)
+public @interface ListResponse {
+    Class<?> value();
     String description() default "";
-    Class<?> implementation();
-    String overrideName() default "";
-    boolean paginated() default false;
 }
 ```
 
-And the corresponding expander:
-
 ```java
-public class ArrayResponseExpander implements JDAEExpander<ArrayResponse> {
+final class ListResponseExpander implements JDAEExpander<ListResponse> {
 
     @Override
-    public void expand(ExpansionContext ctx, ArrayResponse ann) {
-        if (ctx.getTargetKind() != TargetKind.METHOD) {
-            throw new IllegalStateException("@ArrayResponse can only be applied to methods");
-        }
+    public void expand(ExpansionContext ctx, ListResponse annotation) {
+        if (ctx.getTargetKind() != TargetKind.CLASS) ctx.fail("only handlers carry @ListResponse");
 
-        String implementationName = ann.overrideName().isBlank() ?
-                ann.implementation().getSimpleName() : ann.overrideName();
-
-        String description = ann.description().isBlank()
-                ? "Returns an array of '" + implementationName + "'."
-                : ann.description();
-
-        List<AnnotationBuilder> headers = new ArrayList<>();
-
-        if (ann.paginated()) {
-            headers.add(AnnotationBuilder.of(Header.class)
-                    .member("name", "X-Page")
-                    .member("description", "Current page index (0-based)")
-                    .nested("schema", Schema.class, schema ->
-                            schema.member("type", SchemaType.INTEGER))
-            );
-
-            headers.add(AnnotationBuilder.of(Header.class)
-                    .member("name", "X-Page-Size")
-                    .member("description", "Number of '" + implementationName + "' per page")
-                    .nested("schema", Schema.class, schema ->
-                            schema.member("type", SchemaType.INTEGER))
-            );
-
-            headers.add(AnnotationBuilder.of(Header.class)
-                    .member("name", "X-Total-Count")
-                    .member("description", "Total number of '" + implementationName + "' available")
-                    .nested("schema", Schema.class, schema ->
-                            schema.member("type", SchemaType.INTEGER))
-            );
-        }
-
-        ctx.addOrModifyAnnotation(APIResponse.class, api -> {
-            api.member("responseCode", ann.responseCode());
-            api.member("description", description);
-
-            api.nestedArray("content", AnnotationBuilder.of(Content.class)
-                    .nested("schema", Schema.class, schema -> {
-                        schema.member("implementation", ann.implementation());
-                        schema.member("type", SchemaType.ARRAY);
-                        schema.member("named", implementationName);
-                    }));
-
-            if (!headers.isEmpty()) {
-                api.nestedArray("headers", headers.toArray(AnnotationBuilder[]::new));
-            }
-        });
+        String what = annotation.value().getSimpleName();
+        ctx.addAnnotation(APIResponse.class, a -> a
+                .member("responseCode", "200")
+                .member("description", annotation.description().isBlank() ? "A list of " + what : annotation.description())
+                .nested("content", Content.class, c -> c
+                        .member("schema", annotation.value())
+                        .member("array", true)));
     }
 }
 ```
 
-Now, you can annotate your REST endpoint simply as:
-
 ```java
-@GET
-@ArrayResponse(
-        implementation = User.class,
-        paginated = true
-)
-public List<User> getUsers() {
-    // ...
-}
+@GET("/users")
+@ListResponse(User.class)
+public final class ListUsers extends RequestHandler { ... }
 ```
 
-During compilation, this is automatically expanded into the full equivalent `@APIResponse`
-annotation shown earlier, including pagination headers if `paginated = true`.
+The expander runs once per annotated target. It needs a no-argument constructor and nothing else;
+package-private is fine. A `ServiceLoader` entry for `JDAEExpander` registers one too, matched by
+its type argument, for annotations that would rather not name their expander.
 
-## API Documentation
-Full API documentation is in progress and will be available soon.
-In the meantime, refer to the source code and examples, since usage is straightforward and type-safe.
+## What the context gives you
+
+| | |
+|---|---|
+| `addAnnotation(type, …)` | Writes it, replacing any annotation of that type the target carried |
+| `addOrModifyAnnotation(type, …)` | Starts from what the target carries: members set here win, arrays are added to |
+| `annotation(Type.class)` | What the target carries right now, or null — for expanding conditionally |
+| `getTargetKind()`, `getClassInfo()`, `getMethodInfo()`, `getFieldInfo()` | Where this annotation sits |
+| `fail(message)` | Refuses, naming the target in the build error |
+
+Member values are what the annotation type declares: strings, primitives, `Class`, enum constants,
+nested annotations (`nested`), arrays (`nestedArray`, or any array or collection). A single value
+given for an array member means an array of one, exactly as it would in source.
+
+Two annotations of one `@Repeatable` type are written into their container for you. Two of a type
+that is not repeatable is an error, not a class file the JVM will reject later.
+
+## What it guarantees
+
+- **Every annotation typechecks before it is written.** Unknown member, wrong type, unknown enum
+  constant, a member with no default left unset — each fails the build naming the target and the
+  member, instead of surfacing as an `AnnotationFormatError` the first time something reads it.
+- **Expanding twice changes nothing.** An expanded annotation is removed from the class file, and
+  an annotation that is written replaces the one it replaces — so a build without a `clean` never
+  stacks a second copy. Keep the original with `@Expander(keepOriginal = true)` when something
+  reads it at runtime; it stays idempotent.
+- **Nothing else in the class is touched.** Code, frames and the constant pool are copied through:
+  the only difference between the class before and after is the annotations.
+- **Failures are loud.** An expander that cannot be loaded, constructed or run stops the build.
+  There is no silent "expanded nothing".
+- Annotations land where their own `@Retention` says: runtime-visible unless they are `CLASS`.
+
+## Modules
+
+| | |
+|---|---|
+| `jdae-api` | What an expander is written against: `@Expander`, `JDAEExpander`, `ExpansionContext`, `AnnotationBuilder` |
+| `jdae-core` | The expansion: scanning, validation, the ASM rewrite |
+| `jdae-maven-plugin` | The `expand-annotations` goal |
+
+Build it with `mvn install`; `mvn test` compiles real fixtures, expands them and reads the
+annotations back through a fresh classloader.

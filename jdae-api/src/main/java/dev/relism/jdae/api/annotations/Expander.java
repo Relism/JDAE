@@ -8,17 +8,22 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Meta-annotation applied to annotation types that should be expanded by JDAE.
- * Example:
+ * Marks an annotation type as one JDAE expands, and names the expander that does it.
+ *
  * <pre>
- * @Expander(value = MyExpander.class, keepOriginal = false)
- * public @interface ListResponse { Class<?> value(); }
+ * &#64;Expander(ListResponseExpander.class)
+ * public &#64;interface ListResponse { Class&lt;?&gt; value(); }
  * </pre>
+ *
+ * <p>The annotation is removed from the bytecode once it has been expanded, which is what makes a
+ * build repeatable without a {@code clean}. Keep it with {@code keepOriginal = true} when something
+ * reads it at runtime.
  */
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.ANNOTATION_TYPE)
 public @interface Expander {
+
     Class<? extends JDAEExpander<?>> value();
-    boolean keepOriginal() default true;
-    String id() default "";
+
+    boolean keepOriginal() default false;
 }

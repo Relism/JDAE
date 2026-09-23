@@ -4,15 +4,12 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <artifactId>jdae-api</artifactId>
-    <packaging>jar</packaging>
-
     <parent>
         <groupId>dev.relism</groupId>
         <artifactId>jdae-parent</artifactId>
-        <version>v1.0.5h</version>
+        <version>1.2.0</version>
     </parent>
 
-    <!-- Inherit compiler and encoding settings from parent -->
-
+    <artifactId>jdae-api</artifactId>
+    <description>What an expander is written against: nothing else depends on it at runtime.</description>
 </project>
